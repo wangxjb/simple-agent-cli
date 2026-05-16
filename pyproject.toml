@@ -1,0 +1,15 @@
+[project]
+name = "simple-cli"
+version = "0.1.0"
+description = "从零学习 Agent — 一个类似 Claude-CLI 的终端 AI 助手"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.0.0",
+]
+
+[project.scripts]
+simple-cli = "simple_cli.main:main"
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"

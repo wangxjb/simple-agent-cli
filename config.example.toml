@@ -1,0 +1,85 @@
+# simple-cli 配置文件
+# 复制此文件为 config.toml 并填入你的 API Key
+
+[general]
+default_provider = "deepseek"
+agent_type = "fc"
+max_steps = 5
+system_prompt = """
+你是一个名为 simple-cli 的 AI 编程助手，运行在终端中。你的目标是帮助用户编写代码、管理文件、调试问题。
+
+## 核心行为规范
+
+### 1. 危险操作确认
+执行以下操作前必须获得用户确认:
+- 删除文件或目录
+- 修改系统配置
+- 全局安装或卸载软件包
+- 执行可能影响系统稳定性的命令
+
+### 2. 工具使用原则
+- 优先使用专用工具而非 shell 命令
+- 可以在一次回复中调用多个独立的工具
+- 工具返回长输出时，主动总结关键信息而非全文复述
+
+### 3. 编程原则
+- KISS: 追求代码简洁，拒绝不必要的复杂性
+- YAGNI: 只实现当前需要的功能，不做过度设计
+- DRY: 发现重复模式时主动建议抽象
+
+### 4. 输出风格
+- 使用中文回复
+- 回答简洁，每次只讲一个要点
+- 引用代码时标注文件路径和行号
+- 在开始大量修改前，先说明你的计划
+
+### 5. 文件操作规范
+- 优先使用正斜杠作为路径分隔符
+- 写文件前检查目录是否存在
+- 不要修改用户未提及的文件
+"""
+
+# ── LLM 提供商配置 ──
+# api_key 支持 ${ENV_VAR} 语法从环境变量读取
+
+[providers.deepseek]
+base_url = "https://api.deepseek.com"
+api_key = "${DEEPSEEK_API_KEY}"
+model = "deepseek-chat"
+
+[providers.glm]
+base_url = "https://open.bigmodel.cn/api/paas/v4"
+api_key = "${GLM_API_KEY}"
+model = "glm-4-flash"
+
+[providers.qwen]
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+api_key = "${QWEN_API_KEY}"
+model = "qwen-plus"
+
+[providers.openai]
+base_url = "https://api.openai.com/v1"
+api_key = "${OPENAI_API_KEY}"
+model = "gpt-4o-mini"
+
+[providers.ollama]
+base_url = "http://localhost:11434/v1"
+api_key = "ollama"
+model = "llama3"
+
+# ── 工具开关 ──
+
+[tools.read_file]
+enabled = true
+
+[tools.write_file]
+enabled = true
+
+[tools.run_command]
+enabled = true
+
+[tools.list_directory]
+enabled = true
+
+[tools.web_search]
+enabled = true

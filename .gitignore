@@ -1,0 +1,22 @@
+# 学习资料（不上传）
+hello-agents-main/
+
+# 会话数据 & 本地配置
+.simple_cli/
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# API Key 在配置文件中，不上传
+config.toml
+
+# 系统文件
+Thumbs.db
+.DS_Store
