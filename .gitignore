@@ -5,6 +5,9 @@ hello-agents-main/
 .simple_cli/
 .claude/
 
+# 真实密钥备份（不要提交）
+config.toml.real
+
 # Python
 __pycache__/
 *.pyc
@@ -13,9 +16,6 @@ __pycache__/
 dist/
 build/
 *.egg
-
-# API Key 在配置文件中，不上传
-config.toml
 
 # 系统文件
 Thumbs.db
