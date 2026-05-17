@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 from ..llm import HelloAgentsLLM
 from ..tools import ToolRegistry
 from ..context import TokenCounter, HistoryCompressor
+from ..prompt import PromptBuilder
 
 
 class Message:
@@ -60,6 +61,9 @@ class Agent(ABC):
             min_retain_rounds=min_retain_rounds,
             token_counter=self.token_counter,
         )
+        # 动态系统提示
+        self.prompt_builder = PromptBuilder(base_prompt=system_prompt)
+
         self._compression_count = 0  # 压缩次数统计
         self._summary = ""  # 当前有效的历史摘要
 
@@ -190,15 +194,15 @@ class Agent(ABC):
 
     def _build_base_messages(self) -> List[Dict[str, Any]]:
         """
-        构建基础消息列表（含 system_prompt + 摘要 + history）。
+        构建基础消息列表（动态 system_prompt + 摘要 + history）。
 
         子类的 run() 方法应使用此方法构建初始 messages。
         """
         messages: List[Dict[str, Any]] = []
 
-        # 系统提示
-        if self.system_prompt:
-            messages.append({"role": "system", "content": self.system_prompt})
+        # 动态系统提示（角色 + 环境 + 工具 + 项目 + 状态）
+        dynamic_prompt = self.prompt_builder.build(self)
+        messages.append({"role": "system", "content": dynamic_prompt})
 
         # 历史摘要（如果已压缩）
         if self._summary:

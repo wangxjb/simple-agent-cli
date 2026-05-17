@@ -1,8 +1,10 @@
 """统一 LLM 客户端 — 兼容所有 OpenAI 接口协议的大模型"""
 
 import os
+import time
+import random
 from typing import Iterator, List, Dict, Optional, Any
-from openai import OpenAI, AuthenticationError, APIStatusError, APITimeoutError
+from openai import OpenAI, AuthenticationError, APIStatusError, APITimeoutError, RateLimitError
 
 
 class LLMResponse:
@@ -56,20 +58,61 @@ class HelloAgentsLLM:
             timeout=timeout,
         )
 
+        self.max_retries = 3          # 最大重试次数
+        self.base_wait = 1.0          # 基础等待时间 (秒)
+        self.max_wait = 30.0          # 最大等待时间
+
+    # ==================== 重试逻辑 ====================
+
+    def _retry(self, func, *args, **kwargs):
+        """
+        带指数退避的重试包装器。
+
+        可重试: RateLimitError(429), APIStatusError(5xx), APITimeoutError
+        不可重试: AuthenticationError(401), 参数错误(400)
+        """
+        last_error = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                return func(*args, **kwargs)
+            except RateLimitError as e:
+                last_error = e
+                if attempt < self.max_retries:
+                    wait = min(self.base_wait * (2 ** attempt) * 5, self.max_wait)
+                    wait += random.uniform(0, wait * 0.25)
+                    print(f"  [速率限制, {wait:.0f}s 后重试...]", flush=True)
+                    time.sleep(wait)
+            except APIStatusError as e:
+                if e.status_code >= 500:
+                    last_error = e
+                    if attempt < self.max_retries:
+                        wait = min(self.base_wait * (2 ** attempt), self.max_wait)
+                        wait += random.uniform(0, wait * 0.25)
+                        print(f"  [服务端错误 {e.status_code}, {wait:.0f}s 后重试...]", flush=True)
+                        time.sleep(wait)
+                else:
+                    raise  # 4xx 非 429 不重试
+            except APITimeoutError as e:
+                last_error = e
+                if attempt < self.max_retries:
+                    wait = min(self.base_wait * (2 ** attempt), self.max_wait)
+                    print(f"  [超时, {wait:.0f}s 后重试...]", flush=True)
+                    time.sleep(wait)
+            except AuthenticationError:
+                raise  # 认证失败直接抛，不重试
+
+        raise RuntimeError(
+            f"重试 {self.max_retries} 次后仍然失败: {last_error}"
+        )
+
     # ==================== 非流式调用 ====================
 
     def invoke(self, messages: List[Dict[str, str]], **kwargs) -> LLMResponse:
         """
         非流式调用 LLM，返回完整结果。
-
-        Args:
-            messages: [{"role": "user", "content": "..."}, ...]
-            **kwargs: 可覆盖 temperature, max_tokens
-
-        Returns:
-            LLMResponse(content, usage, model)
+        自动重试 429/5xx/超时，不重试 401/400。
         """
-        try:
+        def _call():
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -79,7 +122,6 @@ class HelloAgentsLLM:
             )
             choice = response.choices[0]
             content = choice.message.content or ""
-
             usage = {}
             if response.usage:
                 usage = {
@@ -87,35 +129,28 @@ class HelloAgentsLLM:
                     "completion_tokens": response.usage.completion_tokens,
                     "total_tokens": response.usage.total_tokens,
                 }
-
             return LLMResponse(content=content, usage=usage, model=self.model)
 
+        try:
+            return self._retry(_call)
         except AuthenticationError:
             raise RuntimeError(
                 f"API Key 认证失败，请检查 {self.base_url} 的密钥是否正确"
             )
-        except APITimeoutError:
-            raise RuntimeError(f"请求超时，请检查网络连接或 {self.base_url} 服务状态")
 
     # ==================== 流式调用 ====================
 
     def stream(self, messages: List[Dict[str, str]], **kwargs) -> Iterator[str]:
         """
         流式调用 LLM，逐个 token 返回。
-
-        Args:
-            messages: [{"role": "user", "content": "..."}, ...]
-            **kwargs: 可覆盖 temperature, max_tokens
-
-        Yields:
-            str: 每个文本片段
-
-        —— 调用结束后，可通过 self.last_usage 获取 token 统计。
+        自动重试 429/5xx/超时。
         """
         self.last_usage: Dict[str, int] = {}
         collected: List[str] = []
 
-        try:
+        def _call_and_collect():
+            nonlocal collected
+            collected = []
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -123,27 +158,20 @@ class HelloAgentsLLM:
                 max_tokens=kwargs.get("max_tokens", self.max_tokens),
                 stream=True,
             )
-
             for chunk in response:
                 if not chunk.choices:
                     continue
-
                 delta = chunk.choices[0].delta
                 content = delta.content or ""
-
                 if content:
                     collected.append(content)
                     yield content
-
-                # 最后一个 chunk 可能带 usage
                 if hasattr(chunk, "usage") and chunk.usage:
                     self.last_usage = {
                         "prompt_tokens": chunk.usage.prompt_tokens or 0,
                         "completion_tokens": chunk.usage.completion_tokens or 0,
                         "total_tokens": chunk.usage.total_tokens or 0,
                     }
-
-            # 如果没有通过 chunk.usage 拿到统计，估算一个
             if not self.last_usage:
                 self.last_usage = {
                     "prompt_tokens": 0,
@@ -151,14 +179,10 @@ class HelloAgentsLLM:
                     "total_tokens": len("".join(collected)) // 2,
                 }
 
+        try:
+            yield from self._retry(_call_and_collect)
         except AuthenticationError:
-            raise RuntimeError(
-                "API Key 认证失败，请检查环境变量或配置文件中的密钥"
-            )
-        except APITimeoutError:
-            raise RuntimeError("请求超时，请检查网络连接")
-        except APIStatusError as e:
-            raise RuntimeError(f"API 返回错误 (HTTP {e.status_code}): {e.message}")
+            raise RuntimeError("API Key 认证失败，请检查环境变量或配置文件中的密钥")
 
     # ==================== Function Calling ====================
 
@@ -170,26 +194,11 @@ class HelloAgentsLLM:
     ) -> Dict[str, Any]:
         """
         调用 LLM 并请求 Function Calling 响应。
-
-        Args:
-            messages: 消息列表
-            tools: OpenAI 格式的 tool schemas
-            **kwargs: 可覆盖 temperature, max_tokens
-
-        Returns:
-            {
-                "content": str | None,        # 文本回复（可能为空）
-                "tool_calls": [               # 工具调用列表（可能为空）
-                    {
-                        "id": str,
-                        "name": str,
-                        "arguments": dict
-                    }
-                ],
-                "usage": { prompt_tokens, completion_tokens, total_tokens }
-            }
+        自动重试 429/5xx/超时。
         """
-        try:
+        import json
+
+        def _call():
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -198,13 +207,11 @@ class HelloAgentsLLM:
                 max_tokens=kwargs.get("max_tokens", self.max_tokens),
                 stream=False,
             )
-
             choice = response.choices[0]
             msg = choice.message
 
             tool_calls = []
             if msg.tool_calls:
-                import json
                 for tc in msg.tool_calls:
                     try:
                         arguments = json.loads(tc.function.arguments)
@@ -223,13 +230,14 @@ class HelloAgentsLLM:
                     "completion_tokens": response.usage.completion_tokens,
                     "total_tokens": response.usage.total_tokens,
                 }
-
             return {
                 "content": msg.content,
                 "tool_calls": tool_calls,
                 "usage": usage,
             }
 
+        try:
+            return self._retry(_call)
         except AuthenticationError:
             raise RuntimeError(
                 "API Key 认证失败，请检查环境变量或配置文件中的密钥"
