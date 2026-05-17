@@ -144,6 +144,13 @@ class Agent(ABC):
         if len(self.history) < 4:
             return {"status": "skip", "reason": "消息太少，无需压缩"}
 
+        # 检查是否真的能压缩（轮数 > min_retain_rounds）
+        raw = [{"role": m.role, "content": m.content} for m in self.history]
+        rounds = self._compressor._find_round_boundaries(raw)
+        if len(rounds) <= self._compressor.min_retain_rounds:
+            return {"status": "skip",
+                    "reason": f"只有 {len(rounds)} 轮对话，需超过 {self._compressor.min_retain_rounds} 轮才压缩"}
+
         self._do_compress()
         after = self.token_usage()
         return {
