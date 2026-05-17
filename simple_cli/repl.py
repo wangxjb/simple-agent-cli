@@ -12,7 +12,7 @@ import sys
 import signal
 from datetime import datetime
 from typing import Optional, List
-from .config import AppConfig, create_llm_from_config
+from .config import AppConfig, create_llm_from_config, resolve_agent_type
 from .agent import ReActAgent, FCAgent
 from .tools import ToolRegistry
 from .tools.builtin import (
@@ -169,12 +169,13 @@ def _run_single(config: AppConfig, question: str):
     llm = create_llm_from_config(config)
     registry = _build_registry(config)
 
-    if config.agent_type == "react":
+    agent_type = resolve_agent_type(config, llm)
+    if agent_type == "react":
         agent = ReActAgent(llm, registry, config.system_prompt, config.max_steps)
     else:
         agent = FCAgent(llm, registry, config.system_prompt, config.max_steps)
 
-    print(f"\n使用模型: {llm.model}\n")
+    print(f"\n使用模型: {llm.model} (Agent: {agent_type})\n")
     result = agent.run(question)
     print(f"\n{'=' * 50}")
     print(result)
@@ -324,7 +325,8 @@ def repl(config: AppConfig):
     llm = create_llm_from_config(config)
     registry = _build_registry(config)
     current_provider = config.default_provider
-    current_mode = config.agent_type
+    # 自动检测 FC 支持
+    current_mode = resolve_agent_type(config, llm)
     current_session_name = ""  # 当前已保存的会话名（空 = 新会话）
     plan_buffer = ""  # 当前待审批的计划
 

@@ -93,7 +93,7 @@ class AppConfig:
     """完整的应用配置"""
     default_provider: str = "deepseek"
     providers: Dict[str, ProviderConfig] = field(default_factory=dict)
-    agent_type: str = "fc"          # "react" | "fc"
+    agent_type: str = "auto"        # "auto" | "fc" | "react"
     max_steps: int = 5
     system_prompt: Optional[str] = None
     tools_enabled: Dict[str, bool] = field(default_factory=dict)
@@ -181,6 +181,43 @@ def get_provider(config: AppConfig, name: Optional[str] = None) -> ProviderConfi
             f"提供商 '{provider_name}' 未在配置中找到。可用: {', '.join(available)}"
         )
     return provider
+
+
+def detect_agent_type(llm: "HelloAgentsLLM") -> str:
+    """
+    自动检测模型是否支持 Function Calling。
+
+    发一个最小 FC 请求，看 API 是否接受 tools 参数。
+    如果接受 → "fc"，否则 → "react"
+    """
+    try:
+        response = llm.invoke_with_tools(
+            messages=[{"role": "user", "content": "ping"}],
+            tools=[{
+                "type": "function",
+                "function": {
+                    "name": "ping",
+                    "description": "Test",
+                    "parameters": {"type": "object", "properties": {}}
+                }
+            }],
+            max_tokens=5,
+        )
+        return "fc"
+    except Exception:
+        return "react"
+
+
+def resolve_agent_type(config: AppConfig, llm: "HelloAgentsLLM") -> str:
+    """
+    解析最终的 agent_type:
+    - "auto" → 自动检测
+    - "fc" / "react" → 直接使用
+    """
+    if config.agent_type == "auto":
+        detected = detect_agent_type(llm)
+        return detected
+    return config.agent_type
 
 
 def create_llm_from_config(
