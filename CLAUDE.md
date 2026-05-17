@@ -97,6 +97,13 @@ main.py (CLI 入口)
 - `10-memory-system.md` — 跨会话记忆系统
 - `11-plan-mode.md` — 计划模式：规划→审批→执行
 - `12-mcp-protocol.md` — MCP 协议 + JSON-RPC 工具桥接
+- `13-verify-loop.md` — 验证回环 + 创建→验证→修复闭环
+- `14-react-optimization.md` — ReAct 优化 + 自动 FC 检测 + 工业对比
+
+## 注意事项
+
+- **`config.toml` 不得提交**——已在 `.gitignore` 中排除，使用 `config.example.toml` 作为模板
+- **`agent_type = "auto"`** 时按 base_url/模型名推断 FC 支持，已知云服务走 FC，本地走 ReAct
 
 ## 文档撰写规范
 

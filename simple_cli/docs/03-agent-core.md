@@ -99,23 +99,34 @@ stateDiagram-v2
 ### 3.2 ReAct 的 Prompt 模板（Agent 的灵魂）
 
 ```
-你是一个能调用工具的智能助手。
+你是一个能够使用工具的智能助手。
 
-可用工具:
+## 可用工具
 {tools}                ← 由 ToolRegistry 动态生成
 
-请严格按以下格式回复:
-Thought: 你的思考过程
-Action: 下列格式之一 —
-  tool_name[参数]     调用工具
-  Finish[最终答案]    任务完成
+## 回复格式（必须严格遵守，每一项都不可省略）
 
-开始!
-Question: {question}
-History: {previous_actions_and_observations}
+### 格式规则
+1. **必须**先写 Thought 行，再写 Action 行
+2. Thought 和 Action **各占一行**
+3. Action 只能是以下两种之一：
+   - 调用工具: Action: 工具名[参数名=值1, 参数名=值2]
+   - 完成任务: Action: Finish[你的最终回答]
+
+### 工具调用规则
+- 参数用 `=` 连接（不是 `:`），如 `path=config.toml`
+- 多个参数用 `, ` 分隔
+- 参数值中**可以**包含引号、逗号、冒号
+- 工具名**必须**与上面可用工具列表中的名称完全一致
+
+### 示例
+正确: Action: read_file[path=README.md]
+正确: Action: write_file[path=test.py, content=print("hello")]
+错误: Action: 列出文件  ← 没有指定工具名
+错误: Action: ListDir[.] ← 工具名不匹配
 ```
 
-**关键理解：** ReAct 不需要模型有 Function Calling 能力。工具调用是通过 Prompt 模板"教"模型用自然语言说出来的。这意味着本地模型（Ollama）、旧模型、甚至不支持 FC 的模型都能用。
+**关键理解：** Prompt 里的每一条规则都是踩过坑后加的——`=` vs `:` 的歧义、参数值含逗号导致拆碎、模型随意起工具名——这些都是实战中暴露的真实问题。
 
 ### 3.3 ReAct 解析逻辑
 

@@ -191,8 +191,8 @@ simple-cli/
 ```toml
 [general]
 default_provider = "deepseek"    # 默认 LLM 提供商
-agent_type = "fc"                # fc 或 react
-max_steps = 10                   # 最大工具调用步数
+agent_type = "auto"              # auto = 自动检测, fc = 强制FC, react = 强制ReAct
+max_steps = 0                    # 0 = 不限制，靠上下文窗口管理
 system_prompt = """..."""        # 系统提示词（Agent 的行为规范）
 ```
 

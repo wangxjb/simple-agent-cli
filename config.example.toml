@@ -1,0 +1,56 @@
+# simple-cli 配置文件
+# 复制为 config.toml 并填入你的 API Key
+
+[general]
+default_provider = "deepseek"
+agent_type = "auto"   # auto = 自动检测FC支持, fc = 强制FC, react = 强制ReAct
+max_steps = 0         # 0 = 不限制步数，靠上下文窗口自动管理
+# system_prompt = """自定义系统提示"""
+
+# ── LLM 提供商 ──
+# api_key 支持 ${ENV_VAR} 语法
+
+[providers.deepseek]
+base_url = "https://api.deepseek.com"
+api_key = "${DEEPSEEK_API_KEY}"
+model = "deepseek-chat"
+
+[providers.glm]
+base_url = "https://open.bigmodel.cn/api/paas/v4"
+api_key = "${GLM_API_KEY}"
+model = "glm-4-flash"
+
+[providers.qwen]
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+api_key = "${QWEN_API_KEY}"
+model = "qwen-plus"
+
+[providers.openai]
+base_url = "https://api.openai.com/v1"
+api_key = "${OPENAI_API_KEY}"
+model = "gpt-4o-mini"
+
+[providers.ollama]
+base_url = "http://localhost:11434/v1"
+api_key = "ollama"
+model = "llama3"
+
+# ── 工具开关 ──
+
+[tools.read_file]
+enabled = true
+
+[tools.write_file]
+enabled = true
+
+[tools.run_command]
+enabled = true
+
+[tools.list_directory]
+enabled = true
+
+[tools.web_search]
+enabled = true
+
+[tools.verify_file]
+enabled = true
