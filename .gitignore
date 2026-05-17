@@ -17,6 +17,9 @@ dist/
 build/
 *.egg
 
+# 测试生成文件
+snake_game.py
+
 # 系统文件
 Thumbs.db
 .DS_Store

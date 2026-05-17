@@ -4,7 +4,7 @@
 [general]
 default_provider = "deepseek"
 agent_type = "fc"
-max_steps = 5
+max_steps = 10
 system_prompt = """
 你是一个名为 simple-cli 的 AI 编程助手，运行在终端中。你的目标是帮助用户编写代码、管理文件、调试问题。
 
@@ -44,7 +44,7 @@ system_prompt = """
 
 [providers.deepseek]
 base_url = "https://api.deepseek.com"
-api_key = "${DEEPSEEK_API_KEY}"
+api_key = "sk-3c786326436d4aaeb6a16a8cdbc71bff"
 model = "deepseek-chat"
 
 [providers.glm]

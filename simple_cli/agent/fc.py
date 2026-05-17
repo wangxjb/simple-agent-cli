@@ -39,18 +39,14 @@ class FCAgent(Agent):
     def run(self, question: str) -> str:
         self.add_to_history(question, "user")
 
-        # 构建消息列表
-        messages: List[Dict[str, Any]] = []
+        # 构建消息列表（使用基类的上下文管理）
+        messages: List[Dict[str, Any]] = self._build_base_messages()
 
-        # 系统提示
-        if self.system_prompt:
-            messages.append({"role": "system", "content": self.system_prompt})
-        else:
-            messages.append({"role": "system", "content": FC_SYSTEM_PROMPT})
-
-        # 历史消息
-        for msg in self.history:
-            messages.append(msg.to_dict())
+        # 如果没有自定义 system_prompt，用内置默认
+        if not self.system_prompt and not any(
+            m.get("role") == "system" for m in messages
+        ):
+            messages.insert(0, {"role": "system", "content": FC_SYSTEM_PROMPT})
 
         # 工具 Schema
         tool_schemas = self._build_tool_schemas()
@@ -113,10 +109,8 @@ class FCAgent(Agent):
                     "content": result,
                 })
 
-                # 也记录到本地历史
-                self.add_to_history(
-                    f"Tool {tool_name}({arguments}) → {result}", "tool"
-                )
+                # tool 消息不进入持久化历史
+                # （它们的 tool_call_id 与当次 LLM 调用绑定，跨轮无意义）
 
             # 6. 循环继续 → LLM 基于工具结果继续推理
 
