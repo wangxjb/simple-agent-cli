@@ -406,8 +406,8 @@ def repl(config: AppConfig):
             continue
 
         if user_input == "/memory":
-            store = MemoryStore()
-            mems = store.list_all()
+            mem = MemoryStore()
+            mems = mem.list_all()
             if not mems:
                 print("没有保存的记忆")
             else:
@@ -418,16 +418,16 @@ def repl(config: AppConfig):
         if user_input.startswith("/remember "):
             content = user_input[10:].strip()
             if content:
-                store = MemoryStore()
-                store.save(f"mem_{len(store.list_all())+1}", content, "user", content[:50])
+                mem = MemoryStore()
+                mem.save(f"mem_{len(mem.list_all())+1}", content, "user", content[:50])
                 print(f"已记住: {content}")
             continue
 
         if user_input.startswith("/forget "):
             name = user_input[8:].strip()
             if name:
-                store = MemoryStore()
-                if store.delete(name):
+                mem = MemoryStore()
+                if mem.delete(name):
                     print(f"已删除记忆: {name}")
                 else:
                     print(f"未找到记忆: {name}")
