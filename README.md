@@ -74,9 +74,10 @@ main.py (CLI 入口)
         │     ├─→ base.py (Tool 基类 + ToolRegistry + JSON Schema 生成)
         │     └─→ builtin/ (5 个内置工具)
         ├─→ agent/ (Agent 核心)
-        │     ├─→ base.py (Agent 基类 — LLM + ToolRegistry + 历史管理)
+        │     ├─→ base.py (Agent 基类 — LLM + ToolRegistry + 上下文管理)
         │     ├─→ react.py (ReAct Agent — 文本解析驱动，所有模型可用)
         │     └─→ fc.py (Function Calling Agent — 结构化 tool_calls)
+        ├─→ context.py (TokenCounter + HistoryCompressor — 上下文窗口管理)
         └─→ session.py (SessionStore — 多会话 JSON 持久化)
 ```
 
@@ -105,11 +106,20 @@ main.py (CLI 入口)
 
 工具通过 `config.toml` 中 `[tools.xxx] enabled = true/false` 开关。
 
+### 上下文窗口管理
+
+长对话自动管理 token，防止超出模型窗口上限：
+
+- **Token 计数** — 基于 `tiktoken` 的增量精确计数，O(1) 开销
+- **历史压缩** — LLM 生成五字段结构化摘要（任务目标/关键决策/已完成工作/待处理/重要发现）
+- **滑动窗口** — 保留最近 3 轮完整对话，早期内容压缩为摘要
+- **透明集成** — 在 `add_to_history()` 中自动触发，所有 Agent 子类无需修改
+
 ---
 
 ## 学习文档
 
-`simple_cli/docs/` 下有 5 份详细文档，每份含 Mermaid 流程图/时序图/状态图：
+`simple_cli/docs/` 下有 6 份详细文档，每份含 Mermaid 流程图/时序图/状态图：
 
 | 文档 | 内容 |
 |------|------|
@@ -118,6 +128,7 @@ main.py (CLI 入口)
 | [03-agent-core.md](simple_cli/docs/03-agent-core.md) | ReAct vs Function Calling 两种范式详解 |
 | [04-session-persistence.md](simple_cli/docs/04-session-persistence.md) | 多会话持久化、`/resume` 交互设计 |
 | [05-gap-analysis.md](simple_cli/docs/05-gap-analysis.md) | 与 Claude Code 的差距分析 |
+| [06-context-engineering.md](simple_cli/docs/06-context-engineering.md) | 上下文窗口管理、Token 计数、历史压缩 |
 
 ---
 
@@ -135,6 +146,7 @@ simple-cli/
     ├── repl.py                  # REPL 循环 + 命令处理 + Tab 补全
     ├── config.py                # TOML 加载 + ${ENV} 展开 + 多提供商管理
     ├── session.py               # SessionStore（多会话 JSON 持久化）
+    ├── context.py               # TokenCounter + HistoryCompressor（上下文管理）
     │
     ├── llm/
     │   └── client.py            # HelloAgentsLLM（stream / invoke / invoke_with_tools）
@@ -158,7 +170,8 @@ simple-cli/
         ├── 02-tool-system.md
         ├── 03-agent-core.md
         ├── 04-session-persistence.md
-        └── 05-gap-analysis.md
+        ├── 05-gap-analysis.md
+        └── 06-context-engineering.md
 ```
 
 ---
@@ -173,7 +186,7 @@ simple-cli/
 [general]
 default_provider = "deepseek"    # 默认 LLM 提供商
 agent_type = "fc"                # fc 或 react
-max_steps = 5                    # 最大工具调用步数
+max_steps = 10                   # 最大工具调用步数
 system_prompt = """..."""        # 系统提示词（Agent 的行为规范）
 ```
 
@@ -207,5 +220,5 @@ system_prompt = """..."""        # 系统提示词（Agent 的行为规范）
 
 - **Python** >= 3.11
 - **openai** >= 1.0.0
+- **tiktoken** >= 0.5.0（Token 计数）
 - **pyreadline3**（可选，Tab 补全）
-- 无其他依赖

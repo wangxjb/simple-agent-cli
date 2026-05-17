@@ -65,6 +65,20 @@ main.py (CLI 入口)
 
 `api_key` 支持 `${ENV_VAR}` 语法，运行时由 `os.path.expandvars()` 展开。
 
+## 提交前检查清单
+
+每次提交代码到 GitHub 之前：
+
+1. **README.md 是否与当前功能一致？**
+   - 架构图是否包含所有模块？
+   - 文档列表是否包含所有 docs/*.md？
+   - 项目结构是否包含所有 .py 文件？
+   - 配置项说明是否与实际 config.toml 一致？
+   - 依赖列表是否与 pyproject.toml + 实际依赖一致？
+2. **config.toml 是否含真实密钥？** — 提交前确保只含 `${ENV_VAR}` 占位符
+3. **hello-agents-main/ 未被提交** — .gitignore 已覆盖
+4. **__pycache__/ 和 *.egg-info/ 未被提交** — .gitignore 已覆盖
+
 ## 学习文档
 
 `simple_cli/docs/` 目录下有 6 份详细文档，每份都包含 Mermaid 流程图/时序图/状态图：
