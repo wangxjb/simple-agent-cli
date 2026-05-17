@@ -28,7 +28,7 @@ COMMANDS = [
     "/model", "/mode",
     "/resume", "/sessions",
     "/save", "/tools", "/clear", "/history",
-    "/compress", "/memory", "/remember", "/forget", "/single",
+    "/compress", "/memory", "/remember", "/forget", "/plan", "/approve", "/reject", "/single",
 ]
 
 MODEL_NAMES = ["deepseek", "glm", "qwen", "openai", "ollama"]
@@ -146,6 +146,9 @@ HELP_TEXT = """
   /remember <内容>   保存一条跨会话记忆
   /forget <name>     删除一条记忆
   /memory            列出所有记忆
+  /plan <任务>       进入计划模式：探索→设计方案→展示
+  /approve           批准当前计划并执行
+  /reject            拒绝当前计划
   /history           显示当前会话的历史消息
   /single <问题>     单轮模式（不进入 REPL，回答后退出）
 """
@@ -322,6 +325,7 @@ def repl(config: AppConfig):
     current_provider = config.default_provider
     current_mode = config.agent_type
     current_session_name = ""  # 当前已保存的会话名（空 = 新会话）
+    plan_buffer = ""  # 当前待审批的计划
 
     def _create_agent():
         if current_mode == "react":
@@ -427,6 +431,39 @@ def repl(config: AppConfig):
                     print(f"已删除记忆: {name}")
                 else:
                     print(f"未找到记忆: {name}")
+            continue
+
+        if user_input.startswith("/plan "):
+            task = user_input[6:].strip()
+            if task:
+                print(f"正在为任务生成计划: {task}")
+                print("(探索代码库 + 设计方案...)")
+                plan_buffer = agent.run(
+                    f"请为以下任务设计一个详细的实现计划，按步骤列出，不要开始写代码: {task}"
+                )
+                print(f"\n{'='*50}")
+                print(plan_buffer)
+                print(f"{'='*50}")
+                print("输入 /approve 批准执行，/reject 放弃")
+            continue
+
+        if user_input == "/approve":
+            if not plan_buffer:
+                print("没有待审批的计划")
+            else:
+                print("执行计划中...")
+                result = agent.run(f"请按照以下计划逐步执行:\n{plan_buffer}")
+                print(f"\n{'='*50}")
+                print(result)
+                plan_buffer = ""
+            continue
+
+        if user_input == "/reject":
+            if plan_buffer:
+                print("计划已放弃")
+                plan_buffer = ""
+            else:
+                print("没有待审批的计划")
             continue
 
         if user_input == "/history":
