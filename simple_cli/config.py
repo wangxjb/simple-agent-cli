@@ -183,40 +183,34 @@ def get_provider(config: AppConfig, name: Optional[str] = None) -> ProviderConfi
     return provider
 
 
-def detect_agent_type(llm: "HelloAgentsLLM") -> str:
-    """
-    自动检测模型是否支持 Function Calling。
-
-    发一个最小 FC 请求，看 API 是否接受 tools 参数。
-    如果接受 → "fc"，否则 → "react"
-    """
-    try:
-        response = llm.invoke_with_tools(
-            messages=[{"role": "user", "content": "ping"}],
-            tools=[{
-                "type": "function",
-                "function": {
-                    "name": "ping",
-                    "description": "Test",
-                    "parameters": {"type": "object", "properties": {}}
-                }
-            }],
-            max_tokens=5,
-        )
-        return "fc"
-    except Exception:
-        return "react"
-
-
 def resolve_agent_type(config: AppConfig, llm: "HelloAgentsLLM") -> str:
     """
-    解析最终的 agent_type:
-    - "auto" → 自动检测
+    解析最终的 agent_type。
+
+    策略:
+    - "auto" → 按厂商推断（已知支持 FC 的直接返回 fc）
     - "fc" / "react" → 直接使用
+
+    为什么不做 API 检测？
+    → 每次启动都发测试请求浪费额度，且触发速率限制。
+      已知 DeepSeek/GLM/Qwen/OpenAI 都支持 FC，
+      只有 Ollama/本地模型可能需要 ReAct。
     """
     if config.agent_type == "auto":
-        detected = detect_agent_type(llm)
-        return detected
+        # 按 base_url 推断：已知的云服务都支持 FC
+        fc_indicators = [
+            "api.deepseek.com",
+            "open.bigmodel.cn",     # GLM
+            "dashscope.aliyuncs.com", # Qwen
+            "api.openai.com",
+            "api.moonshot.cn",
+        ]
+        url = (llm.base_url or "").lower()
+        for indicator in fc_indicators:
+            if indicator in url:
+                return "fc"
+        # 未知提供商（如本地 Ollama）→ 默认 ReAct
+        return "react"
     return config.agent_type
 
 
