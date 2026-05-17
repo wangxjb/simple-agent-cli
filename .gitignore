@@ -29,3 +29,4 @@ Thumbs.db
 index.html\npacman_game.py
 index.html
 pacman_game.py
+/config.toml
