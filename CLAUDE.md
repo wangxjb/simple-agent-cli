@@ -68,19 +68,22 @@ main.py (CLI 入口)
 
 `api_key` 支持 `${ENV_VAR}` 语法，运行时由 `os.path.expandvars()` 展开。
 
-## 提交前检查清单
+## 提交前检查清单（强制执行，不可跳过）
 
-每次提交代码到 GitHub 之前：
+**每次 `git commit` 之前必须逐项核对，不是可选的，是必须的步骤。**
 
 1. **README.md 是否与当前功能一致？**
-   - 架构图是否包含所有模块？
-   - 文档列表是否包含所有 docs/*.md？
-   - 项目结构是否包含所有 .py 文件？
-   - 配置项说明是否与实际 config.toml 一致？
-   - 依赖列表是否与 pyproject.toml + 实际依赖一致？
-2. **config.toml 是否含真实密钥？** — 提交前确保只含 `${ENV_VAR}` 占位符
-3. **hello-agents-main/ 未被提交** — .gitignore 已覆盖
-4. **__pycache__/ 和 *.egg-info/ 未被提交** — .gitignore 已覆盖
+   - 架构图：`prompt.py` / `memory.py` / `mcp.py` / `context.py` 是否都在？
+   - 工具数量：与 `tools/builtin/` 下实际文件数一致
+   - 文档列表：与 `docs/` 下 `*.md` 实际数量一致（当前 14 篇）
+   - 项目结构：所有新增 `.py` 文件是否列出
+   - 配置默认值：`agent_type` / `max_steps` / `max_tokens` 与代码一致
+   - 依赖列表：与 `pyproject.toml` + 实际 `import` 一致
+2. **相关学习文档是否同步更新？**
+   - 代码改了什么关键逻辑 → 对应 `docs/` 中的文档也更新
+3. **`config.toml` 不在暂存区** — `.gitignore` 已排除，确认 `git status` 中无此文件
+4. **无测试生成文件** — `index.html` / `snake_game.py` / `hello.py` 等不被提交
+5. **无 `__pycache__/` `*.egg-info/` `.simple_cli/` `.claude/`** — `.gitignore` 已覆盖
 
 ## 学习文档
 
