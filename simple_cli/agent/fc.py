@@ -64,13 +64,25 @@ class FCAgent(Agent):
 
             # 1. 调用 LLM（带 tools）
             print(f"  [LLM 思考中...]", end="", flush=True)
+            progress_state = {"next_chars": 2048, "printed": False}
+
+            def _show_stream_progress(event: str, chars: int) -> None:
+                if chars >= progress_state["next_chars"]:
+                    print(".", end="", flush=True)
+                    progress_state["printed"] = True
+                    progress_state["next_chars"] += 2048
+
             try:
                 response = self.llm.invoke_with_tools(
                     messages=messages,
                     tools=tool_schemas,
+                    stream=True,
+                    on_progress=_show_stream_progress,
                 )
             except Exception as e:
                 return f"错误: LLM 调用失败 — {e}"
+            if progress_state["printed"]:
+                print("", flush=True)
 
             # 2. 检查是否有 tool_calls
             tool_calls = response.get("tool_calls", [])

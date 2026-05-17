@@ -198,14 +198,14 @@ class HelloAgentsLLM:
         """
         import json
 
-        def _call():
+        def _build_request_kwargs(stream: bool) -> Dict[str, Any]:
             request_kwargs = {
                 "model": self.model,
                 "messages": messages,
                 "tools": tools,
                 "temperature": kwargs.get("temperature", self.temperature),
                 "max_tokens": kwargs.get("max_tokens", self.max_tokens),
-                "stream": False,
+                "stream": stream,
             }
             thinking = kwargs.get("thinking")
             is_deepseek_v4 = (
@@ -216,9 +216,87 @@ class HelloAgentsLLM:
                 request_kwargs["extra_body"] = {
                     "thinking": {"type": thinking or "disabled"}
                 }
+            return request_kwargs
+
+        def _stream_call() -> Dict[str, Any]:
+            on_progress = kwargs.get("on_progress")
+            content_parts: List[str] = []
+            reasoning_parts: List[str] = []
+            tool_parts: Dict[int, Dict[str, str]] = {}
+            usage = {}
 
             response = self.client.chat.completions.create(
-                **request_kwargs,
+                **_build_request_kwargs(stream=True),
+            )
+            for chunk in response:
+                if hasattr(chunk, "usage") and chunk.usage:
+                    usage = {
+                        "prompt_tokens": chunk.usage.prompt_tokens or 0,
+                        "completion_tokens": chunk.usage.completion_tokens or 0,
+                        "total_tokens": chunk.usage.total_tokens or 0,
+                    }
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+
+                reasoning_delta = getattr(delta, "reasoning_content", None)
+                if reasoning_delta:
+                    reasoning_parts.append(reasoning_delta)
+                    if on_progress:
+                        on_progress("reasoning", len("".join(reasoning_parts)))
+
+                content_delta = getattr(delta, "content", None)
+                if content_delta:
+                    content_parts.append(content_delta)
+                    if on_progress:
+                        on_progress("content", len("".join(content_parts)))
+
+                for tc in getattr(delta, "tool_calls", None) or []:
+                    index = getattr(tc, "index", 0) or 0
+                    current = tool_parts.setdefault(
+                        index,
+                        {"id": "", "name": "", "arguments": ""},
+                    )
+                    tool_id = getattr(tc, "id", None)
+                    if tool_id:
+                        current["id"] = tool_id
+                    function = getattr(tc, "function", None)
+                    if function:
+                        name_delta = getattr(function, "name", None)
+                        if name_delta:
+                            current["name"] += name_delta
+                        args_delta = getattr(function, "arguments", None)
+                        if args_delta:
+                            current["arguments"] += args_delta
+                            if on_progress:
+                                on_progress("tool_arguments", len(current["arguments"]))
+
+            tool_calls = []
+            for index in sorted(tool_parts):
+                tc = tool_parts[index]
+                try:
+                    arguments = json.loads(tc["arguments"]) if tc["arguments"] else {}
+                except json.JSONDecodeError:
+                    arguments = {}
+                tool_calls.append({
+                    "id": tc["id"],
+                    "name": tc["name"],
+                    "arguments": arguments,
+                })
+
+            return {
+                "content": "".join(content_parts),
+                "reasoning_content": "".join(reasoning_parts) or None,
+                "tool_calls": tool_calls,
+                "usage": usage,
+            }
+
+        def _call():
+            if kwargs.get("stream"):
+                return _stream_call()
+
+            response = self.client.chat.completions.create(
+                **_build_request_kwargs(stream=False),
             )
             choice = response.choices[0]
             msg = choice.message
