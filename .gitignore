@@ -19,6 +19,7 @@ build/
 
 # 测试生成文件
 snake_game.py
+hello.py
 
 # 系统文件
 Thumbs.db
