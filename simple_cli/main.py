@@ -3,6 +3,10 @@
 import argparse
 import sys
 import os
+import warnings
+
+# 抑制 openai SDK 在 Python 3.14 上的 Pydantic 兼容性警告
+warnings.filterwarnings("ignore", message=".*Pydantic V1.*")
 
 # Windows 终端 UTF-8 兼容
 if sys.platform == "win32":
