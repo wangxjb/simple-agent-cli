@@ -87,7 +87,8 @@ class ReActAgent(Agent):
                 parse_fail_count += 1
                 if parse_fail_count >= 5:
                     return f"循环检测: 连续 {parse_fail_count} 次 Action 解析失败，强制终止"
-                self.add_to_history(f"Action 解析失败，请检查格式", "system")
+                # 不写入持久化历史（内部反馈，不污染上下文）
+                print(f"  [提示] Action 解析失败，重试中...", flush=True)
                 continue
 
             # 4. 判断终止条件
@@ -106,10 +107,7 @@ class ReActAgent(Agent):
             tool_name, tool_input = self._parse_action(action)
 
             if not tool_name:
-                self.add_to_history(
-                    f"Observation: 无效的 Action 格式，应为 tool_name[参数]",
-                    "system"
-                )
+                print(f"  [提示] 无效的 Action 格式，重试中...", flush=True)
                 continue
 
             # 将字符串参数映射到工具的第一个必填参数
