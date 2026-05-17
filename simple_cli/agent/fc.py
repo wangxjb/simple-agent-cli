@@ -79,6 +79,10 @@ class FCAgent(Agent):
                 # 没有工具调用 → 检查是否为最终回复或死循环
                 content = response.get("content") or ""
 
+                if content.strip():
+                    self.add_to_history(content, "assistant")
+                    return content
+
                 # 循环检测: 连续3次相同内容 → 强制终止
                 if content.strip() == last_content.strip():
                     repeat_count += 1
