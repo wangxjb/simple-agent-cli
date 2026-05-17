@@ -214,6 +214,116 @@ class Agent(ABC):
 
         return messages
 
+    # ===== 子代理 =====
+
+    def run_as_subagent(
+        self,
+        task: str,
+        tool_filter: Optional[List[str]] = None,
+        max_steps_override: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        作为子代理运行任务 — 上下文隔离模式。
+
+        保存当前状态 → 创建独立上下文 → 执行 → 恢复 → 返回摘要。
+
+        Args:
+            task: 子任务描述
+            tool_filter: 允许使用的工具名列表，None = 全部可用
+            max_steps_override: 覆盖 max_steps
+
+        Returns:
+            {
+                "success": bool,
+                "summary": str,
+                "metadata": {steps, tools_used, duration_seconds, ...}
+            }
+        """
+        import time
+
+        # 1. 保存主 Agent 状态
+        saved_history = list(self.history)
+        saved_token_count = self._token_count
+        saved_summary = self._summary
+
+        # 2. 工具过滤
+        disabled_tools = {}
+        if tool_filter and self.tool_registry:
+            for name in self.tool_registry.list_names():
+                if name not in tool_filter:
+                    disabled_tools[name] = self.tool_registry.get(name)
+                    self.tool_registry.unregister(name)
+
+        # 3. 覆盖 max_steps
+        original_max_steps = self.max_steps
+        if max_steps_override is not None:
+            self.max_steps = max_steps_override
+
+        # 4. 隔离上下文
+        self.history = []
+        self._token_count = 0
+        self._summary = ""
+
+        # 5. 执行
+        start = time.time()
+        success = True
+        result = ""
+        try:
+            result = self.run(task)
+        except Exception as e:
+            success = False
+            result = f"子代理执行失败: {e}"
+
+        duration = round(time.time() - start, 2)
+        steps = len([m for m in self.history if m.role == "assistant"])
+        # 提取工具名: "Tool read_file({'path':'x'}) → ..." → "read_file"
+        tools_used = []
+        for m in self.history:
+            if m.role == "tool":
+                name = m.content.split("(")[0].replace("Tool ", "").strip()
+                if name and name not in tools_used:
+                    tools_used.append(name)
+
+        # 6. 生成摘要
+        summary = self._make_subagent_summary(task, result, steps, tools_used, duration)
+
+        # 7. 恢复主 Agent 状态
+        self.history = saved_history
+        self._token_count = saved_token_count
+        self._summary = saved_summary
+        self.max_steps = original_max_steps
+        for name, tool in disabled_tools.items():
+            self.tool_registry.register(tool)
+
+        return {
+            "success": success,
+            "summary": summary,
+            "result": result,
+            "metadata": {
+                "steps": steps,
+                "tools_used": tools_used,
+                "duration_seconds": duration,
+                "requested_tools": tool_filter or list(disabled_tools.keys()) or self.tool_registry.list_names(),
+            },
+        }
+
+    def _make_subagent_summary(
+        self, task: str, result: str, steps: int,
+        tools_used: List[str], duration: float,
+    ) -> str:
+        """生成子代理执行摘要（轻量，不调用 LLM）"""
+        preview = result[:300]
+        if len(result) > 300:
+            preview += "..."
+        parts = [
+            f"任务: {task}",
+            f"结果: {preview}",
+            f"步数: {steps}, 耗时: {duration}s",
+        ]
+        if tools_used:
+            parts.append(f"使用工具: {', '.join(tools_used)}")
+        return "\n".join(parts)
+
     def __repr__(self) -> str:
         return (f"{self.__class__.__name__}(model={self.llm.model}, "
                 f"tools={len(self.tool_registry)}, tokens={self._token_count})")
