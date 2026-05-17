@@ -78,12 +78,15 @@ main.py (CLI 入口)
         │     └─→ llm/client.py (统一 LLM 客户端，兼容 OpenAI 协议)
         ├─→ tools/ (可插拔工具系统)
         │     ├─→ base.py (Tool 基类 + ToolRegistry + JSON Schema 生成)
-        │     └─→ builtin/ (5 个内置工具)
-        ├─→ agent/ (Agent 核心)
+        │     └─→ builtin/ (6 个内置工具)
+        ├─→ agent/ (Agent 核心 — auto 自动选择 FC/ReAct)
         │     ├─→ base.py (Agent 基类 — LLM + ToolRegistry + 上下文管理)
         │     ├─→ react.py (ReAct Agent — 文本解析驱动，所有模型可用)
         │     └─→ fc.py (Function Calling Agent — 结构化 tool_calls)
         ├─→ context.py (TokenCounter + HistoryCompressor — 上下文窗口管理)
+        ├─→ prompt.py (PromptBuilder — 动态系统提示五维度组装)
+        ├─→ memory.py (MemoryStore — 跨会话持久化记忆)
+        ├─→ mcp.py (MCPClient — JSON-RPC 外部工具协议)
         └─→ session.py (SessionStore — 多会话 JSON 持久化)
 ```
 
@@ -100,7 +103,7 @@ main.py (CLI 入口)
 
 在 REPL 中用 `/mode react` 和 `/mode fc` 切换，同一问题观察两种范式的不同行为。
 
-### 5 个内置工具
+### 6 个内置工具
 
 | 工具 | 功能 |
 |------|------|
@@ -109,6 +112,7 @@ main.py (CLI 入口)
 | `run_command` | 执行 shell 命令 |
 | `list_directory` | 列出目录结构 |
 | `web_search` | DuckDuckGo 搜索（零 API Key） |
+| `verify_file` | 验证文件正确性（Python 语法 / HTML 结构 / JS 节点检查） |
 
 工具通过 `config.toml` 中 `[tools.xxx] enabled = true/false` 开关。
 
@@ -125,16 +129,24 @@ main.py (CLI 入口)
 
 ## 学习文档
 
-`simple_cli/docs/` 下有 6 份详细文档，每份含 Mermaid 流程图/时序图/状态图：
+`simple_cli/docs/` 下有 14 份详细文档，每份含 Mermaid 流程图/时序图/状态图：
 
 | 文档 | 内容 |
 |------|------|
 | [01-llm-client.md](simple_cli/docs/01-llm-client.md) | LLM 客户端原理、流式 SSE、系统提示工程 |
 | [02-tool-system.md](simple_cli/docs/02-tool-system.md) | 可插拔工具系统、JSON Schema 生成、注册表模式 |
-| [03-agent-core.md](simple_cli/docs/03-agent-core.md) | ReAct vs Function Calling 两种范式详解 |
+| [03-agent-core.md](simple_cli/docs/03-agent-core.md) | ReAct vs FC 详解、参数映射演进、循环检测 |
 | [04-session-persistence.md](simple_cli/docs/04-session-persistence.md) | 多会话持久化、`/resume` 交互设计 |
 | [05-gap-analysis.md](simple_cli/docs/05-gap-analysis.md) | 与 Claude Code 的差距分析 |
 | [06-context-engineering.md](simple_cli/docs/06-context-engineering.md) | 上下文窗口管理、Token 计数、历史压缩 |
+| [07-system-prompt-engineering.md](simple_cli/docs/07-system-prompt-engineering.md) | 动态系统提示、五维度注入 |
+| [08-error-recovery.md](simple_cli/docs/08-error-recovery.md) | 错误重试、指数退避 |
+| [09-subagent.md](simple_cli/docs/09-subagent.md) | 子代理、上下文隔离、摘要返回 |
+| [10-memory-system.md](simple_cli/docs/10-memory-system.md) | 跨会话记忆系统 |
+| [11-plan-mode.md](simple_cli/docs/11-plan-mode.md) | 计划模式：规划→审批→执行 |
+| [12-mcp-protocol.md](simple_cli/docs/12-mcp-protocol.md) | MCP 协议、JSON-RPC 工具桥接 |
+| [13-verify-loop.md](simple_cli/docs/13-verify-loop.md) | 验证回环、创建→验证→修复 |
+| [14-react-optimization.md](simple_cli/docs/14-react-optimization.md) | ReAct 优化、自动 FC 检测、工业对比 |
 
 ---
 
@@ -142,17 +154,20 @@ main.py (CLI 入口)
 
 ```
 simple-cli/
-├── config.toml                  # 配置模板（模型、工具、系统提示）
-├── pyproject.toml               # 项目依赖（仅 openai + 标准库）
+├── config.example.toml          # 配置模板（复制为 config.toml 使用）
+├── pyproject.toml               # 项目依赖
 ├── CLAUDE.md                    # Claude Code 项目指令
 ├── README.md                    # 你正在读的这份文件
 │
 └── simple_cli/
     ├── main.py                  # CLI 入口（argparse + 模式分发）
     ├── repl.py                  # REPL 循环 + 命令处理 + Tab 补全
-    ├── config.py                # TOML 加载 + ${ENV} 展开 + 多提供商管理
+    ├── config.py                # TOML 加载 + ${ENV} 展开 + auto FC 检测
     ├── session.py               # SessionStore（多会话 JSON 持久化）
     ├── context.py               # TokenCounter + HistoryCompressor（上下文管理）
+    ├── prompt.py                # PromptBuilder（动态系统提示五维度组装）
+    ├── memory.py                # MemoryStore（跨会话记忆）
+    ├── mcp.py                   # MCPClient（JSON-RPC 外部工具协议）
     │
     ├── llm/
     │   └── client.py            # HelloAgentsLLM（stream / invoke / invoke_with_tools）
@@ -164,20 +179,19 @@ simple-cli/
     │       ├── write_file.py    # 写文件工具
     │       ├── run_command.py   # 执行命令工具
     │       ├── list_dir.py      # 列目录工具
-    │       └── web_search.py    # 网页搜索工具（DuckDuckGo）
+    │       ├── web_search.py    # 网页搜索工具
+    │       └── verify_file.py   # 文件验证工具
     │
     ├── agent/
-    │   ├── base.py              # Agent 基类 + Message
-    │   ├── react.py             # ReAct Agent
-    │   └── fc.py                # Function Calling Agent
+    │   ├── base.py              # Agent 基类（子代理 + 上下文管理 + 循环检测）
+    │   ├── react.py             # ReAct Agent（Prompt 优化 + KV 双分隔符）
+    │   └── fc.py                # Function Calling Agent（结构化 tool_calls）
     │
     └── docs/
         ├── 01-llm-client.md
         ├── 02-tool-system.md
-        ├── 03-agent-core.md
-        ├── 04-session-persistence.md
-        ├── 05-gap-analysis.md
-        └── 06-context-engineering.md
+        ├── ...
+        └── 14-react-optimization.md
 ```
 
 ---
