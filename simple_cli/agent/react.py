@@ -47,6 +47,7 @@ class ReActAgent(Agent):
 
         # 循环检测
         last_action = ""
+        parse_fail_count = 0   # 解析失败连续计数
 
         max_steps = self.max_steps if self.max_steps > 0 else float('inf')
         while step < max_steps:
@@ -83,6 +84,9 @@ class ReActAgent(Agent):
                 self.add_to_history(f"Thought: {thought}", "assistant")
 
             if not action:
+                parse_fail_count += 1
+                if parse_fail_count >= 5:
+                    return f"循环检测: 连续 {parse_fail_count} 次 Action 解析失败，强制终止"
                 self.add_to_history(f"Action 解析失败，请检查格式", "system")
                 continue
 
@@ -94,9 +98,9 @@ class ReActAgent(Agent):
 
             # 5. 循环检测
             if action and action == last_action:
-                # 同一 Action 连续出现 → 死循环
                 return f"循环检测: 连续执行相同操作，强制终止。结果: {self.history[-1].content if self.history else '无'}"
             last_action = action
+            parse_fail_count = 0  # 有有效 Action 则重置
 
             # 6. 解析并执行工具
             tool_name, tool_input = self._parse_action(action)
@@ -162,18 +166,22 @@ class ReActAgent(Agent):
 
         params = tool.get_parameters()
 
-        # 尝试解析 key:value 格式 (如: path: ".", recursive: false)
-        if ":" in tool_input and len(params) > 0:
-            return self._parse_kv_input(tool_input, params)
+        # 尝试解析 key:value 或 key=value 格式
+        if len(params) > 0:
+            # 检测是否包含参数名引导的 KV 格式
+            first_param = params[0].name
+            if re.match(rf'{first_param}\s*[:=]', tool_input, re.IGNORECASE):
+                return self._parse_kv_input(tool_input, params)
 
-        # 单值 → 映射到第一个必填参数
+        # 单值 → 去掉可能的前缀 "name=" 或 "name:"，映射到第一个必填参数
+        cleaned = re.sub(r'^\w+\s*[:=]\s*', '', tool_input.strip(), count=1)
         for p in params:
             if p.required:
-                return {p.name: tool_input.strip()}
+                return {p.name: cleaned}
 
         # 没有必填参数 → 第一个参数
         if params:
-            return {params[0].name: tool_input.strip()}
+            return {params[0].name: cleaned}
 
         return {}
 
@@ -190,13 +198,13 @@ class ReActAgent(Agent):
 
         # 策略: 按参数名定位
         # 如: "path: /tmp/x.html, content: <html>,</html>"
-        # → 找到 "path:" → 值到 "content:" 前 → path = "/tmp/x.html"
-        # → 找到 "content:" → 值到文本末尾 → content = "<html>,</html>"
+        # 或: "command=python -c \"...\""
+        # → 支持 : 和 = 两种分隔符
 
         remaining = text
         for i, pname in enumerate(param_names):
-            # 查找当前参数名后跟冒号的位置
-            pattern = re.compile(rf'{pname}\s*:\s*', re.IGNORECASE)
+            # 查找当前参数名后跟 : 或 = 的位置
+            pattern = re.compile(rf'{pname}\s*[:=]\s*', re.IGNORECASE)
             match = pattern.search(remaining)
             if not match:
                 continue
@@ -208,25 +216,33 @@ class ReActAgent(Agent):
             # 找下一个参数名的位置（作为当前值的边界）
             if i + 1 < len(param_names):
                 next_pattern = re.compile(
-                    rf',?\s*{param_names[i + 1]}\s*:\s*', re.IGNORECASE
+                    rf',?\s*{param_names[i + 1]}\s*[:=]\s*', re.IGNORECASE
                 )
                 next_match = next_pattern.search(remaining_after_key)
                 if next_match:
                     val = remaining_after_key[:next_match.start()].strip()
-                    # 去掉首尾的引号
-                    val = val.strip('"').strip("'")
+                    val = self._strip_quotes(val)
                     result[pname] = val
-                    # 移动到下一个参数名
                     remaining = remaining_after_key[next_match.start():]
                 else:
-                    val = remaining_after_key.strip().strip('"').strip("'")
+                    val = remaining_after_key.strip()
+                    val = self._strip_quotes(val)
                     result[pname] = val
                     break
             else:
                 # 最后一个参数，取到末尾
-                val = remaining_after_key.strip().strip('"').strip("'")
+                val = remaining_after_key.strip()
+                val = self._strip_quotes(val)
                 result[pname] = val
 
         if not result:
             return {}
         return result
+
+    @staticmethod
+    def _strip_quotes(val: str) -> str:
+        """只在值整体被匹配引号包裹时才去掉引号"""
+        if len(val) >= 2:
+            if (val[0] == val[-1] and val[0] in ('"', "'")):
+                return val[1:-1]
+        return val
