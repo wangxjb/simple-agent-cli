@@ -50,7 +50,7 @@ system_prompt = """
 
 [providers.deepseek]
 base_url = "https://api.deepseek.com"
-api_key = "${DEEPSEEK_API_KEY}"
+api_key = "sk-3c786326436d4aaeb6a16a8cdbc71bff"
 model = "deepseek-v4-pro"
 
 [providers.glm]

@@ -40,7 +40,7 @@ class HelloAgentsLLM:
         api_key: str,
         model: str,
         temperature: float = 0.0,
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,
         timeout: int = 120,
     ):
         if not all([base_url, api_key, model]):
