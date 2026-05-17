@@ -139,26 +139,84 @@ flowchart TD
 
 ### 3.4 ReAct 参数映射（关键实现）
 
-ReAct 的 Action 中是纯文本参数 `read_file[config.py]`，但工具期望的是字典 `{"path": "config.py"}`。`_build_tool_params` 方法做智能映射：
+ReAct 的 Action 中是纯文本参数 `read_file[config.py]`，但工具期望的是字典 `{"path": "config.py"}`。`_build_tool_params` 做智能映射，经历了多次迭代：
+
+#### 分层映射策略
+
+```mermaid
+flowchart TD
+    Input[tool_input 字符串] --> Detect{以参数名开头?<br/>例: path=... 或 path: ...}
+
+    Detect -->|是，多参数| KV["_parse_kv_input<br/>按参数名锚点定位值边界"]
+    Detect -->|否，单值| Simple["映射到第一个必填参数<br/>自动剥除可能的 param= 前缀"]
+
+    KV --> KVDetail["支持 : 和 = 两种分隔符<br/>按参数名顺序确定值边界<br/>不依赖逗号分割"]
+
+    Simple --> Result["{path: config.py}"]
+    KVDetail --> Result
+```
+
+#### 进化历程（踩过的坑）
+
+| 版本 | 做法 | 问题 |
+|------|------|------|
+| v1 | 逗号分割 `, ` | HTML 内容的逗号把参数拆碎 |
+| v2 | 参数名 + `:` 锚点 | 模型用 `=` 时找不到分隔符 |
+| v3（当前） | 参数名 + `[:=]` 锚点 + `=`/`:` 双支持 + 边界定位 | — |
+
+#### v3 核心代码
 
 ```python
 def _build_tool_params(self, tool_name, tool_input):
-    tool = self.tool_registry.get(tool_name)
     params = tool.get_parameters()
+    if len(params) > 0:
+        first_param = params[0].name
+        # 检测: 以 "paramName:" 或 "paramName=" 开头 → KV 模式
+        if re.match(rf'{first_param}\s*[:=]', tool_input):
+            return self._parse_kv_input(tool_input, params)
 
-    # 1. 尝试解析 key:value 格式
-    #    例: list_directory[path: ".", recursive: false]
-    if ":" in tool_input:
-        return self._parse_kv_input(tool_input, params)
-
-    # 2. 单值 → 映射到第一个必填参数
-    #    例: read_file[config.py] → {"path": "config.py"}
+    # 单值: 去掉 "paramName=" 前缀，映射到第一个必填参数
+    cleaned = re.sub(r'^\w+\s*[:=]\s*', '', tool_input.strip(), count=1)
     for p in params:
         if p.required:
-            return {p.name: tool_input.strip()}
+            return {p.name: cleaned}
+    return {params[0].name: cleaned} if params else {}
 ```
 
-### 3.5 ReAct 的优势与局限
+#### `_parse_kv_input` — 按参数名锚点定位
+
+```
+输入: "path= /tmp/x.html, content= <html>,<body>hi</body></html>"
+                               ↑
+                    不是在这里切（旧方案）
+                               ↓
+找到 "path=" → 值到 "content=" 前 → path = "/tmp/x.html"
+找到 "content=" → 值到末尾 → content = "<html>,<body>hi</body></html>"
+```
+
+关键：用下一个参数名作为当前参数值的**边界**，而非依赖逗号。
+
+#### `_strip_quotes` — 智能引号剥离
+
+```python
+@staticmethod
+def _strip_quotes(val):
+    if len(val) >= 2 and val[0] == val[-1] and val[0] in ('"', "'"):
+        return val[1:-1]    # 整体包裹才去引号
+    return val               # 否则保留
+```
+
+### 3.5 循环检测 — 防止死循环
+
+`max_steps=0`（不限制步数）后，Agent 可能在完成任务后反复输出。三层检测：
+
+| 检测类型 | 触发条件 | 处理 |
+|----------|----------|------|
+| **相同 Action** | 连续 2 次完全相同 | 强制终止 |
+| **解析连续失败** | 连续 5 次 Action 解析失败 | 强制终止 |
+| **内部错误** | Action 格式无效 | 打印提示，不写入持久化历史 |
+
+### 3.6 ReAct 的优势与局限
 
 **优势：**
 - 所有模型都支持，包括本地 Ollama 模型

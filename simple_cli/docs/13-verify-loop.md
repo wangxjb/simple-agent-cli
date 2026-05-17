@@ -41,8 +41,31 @@ stateDiagram-v2
 
 ## 四、集成方式
 
-1. 系统提示加入:"创建文件后必须用 verify_file 验证，验证失败必须修复"
-2. PromptBuilder 工具列表自动包含 verify_file
+1. 系统提示加入: "创建或修改任何代码文件后，必须调用 verify_file 验证。验证失败必须根据错误信息修复，然后再次验证。验证通过后才能告诉用户'已完成'。"
+2. PromptBuilder 动态注入系统提示，Agent 自动遵守验证规则
 3. Agent 自然形成 创建→验证→修复 循环
 
-这个能力让 Agent 从"写完交差"变成"写完验过才交差"。
+## 五、实际运行示例
+
+```
+> 帮我写一个贪吃蛇HTML游戏
+
+Step 1: write_file[path=snake.html, content=<!DOCTYPE html>...]
+  → 成功写入 11390 字符
+
+Step 2: verify_file[path=snake.html]
+  → 验证失败: 缺少 <body> 标签，<script> 未正确闭合
+
+Step 3: read_file[path=snake.html]  (检查内容)
+  → 定位到具体问题行
+
+Step 4: write_file[path=snake.html, content=...]  (修复后重新写入)
+
+Step 5: verify_file[path=snake.html]
+  → 验证通过: HTML 结构正确
+  → 告诉用户"已完成并验证通过"
+```
+
+## 六、总结
+
+这个能力让 Agent 从"写完交差"变成"写完验过才交差"——就像 TDD 的 red-green-refactor 循环，验证是 Agent 可靠性的最后一道防线。
