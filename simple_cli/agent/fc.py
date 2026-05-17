@@ -52,7 +52,8 @@ class FCAgent(Agent):
         tool_schemas = self._build_tool_schemas()
         step = 0
 
-        while step < self.max_steps:
+        max_steps = self.max_steps if self.max_steps > 0 else float('inf')
+        while step < max_steps:
             step += 1
             print(f"\n--- Step {step} ---")
 
@@ -114,4 +115,4 @@ class FCAgent(Agent):
 
             # 6. 循环继续 → LLM 基于工具结果继续推理
 
-        return "已达到最大步数限制，任务未完成。"
+        return "警告: 已达到最大步数限制，任务可能未完成。可以增加 config.toml 中 max_steps 的值（设为 0 则不限制）。"

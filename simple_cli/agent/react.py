@@ -45,7 +45,8 @@ class ReActAgent(Agent):
         self.add_to_history(question, "user")
         step = 0
 
-        while step < self.max_steps:
+        max_steps = self.max_steps if self.max_steps > 0 else float('inf')
+        while step < max_steps:
             step += 1
             print(f"\n--- Step {step} ---", flush=True)
 
@@ -106,7 +107,7 @@ class ReActAgent(Agent):
             self.add_to_history(f"Action: {action}", "assistant")
             self.add_to_history(f"Observation: {result}", "system")
 
-        return "已达到最大步数限制，任务未完成。"
+        return "警告: 已达到最大步数限制，任务可能未完成。可以增加 config.toml 中 max_steps 的值。"
 
     # ===== 解析方法 =====
 
