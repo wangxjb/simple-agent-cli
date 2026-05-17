@@ -52,6 +52,11 @@ class FCAgent(Agent):
         tool_schemas = self._build_tool_schemas()
         step = 0
 
+        # 循环检测状态
+        last_content = ""
+        repeat_count = 0        # 连续相同内容的次数
+        no_tool_count = 0       # 连续无工具调用的次数
+
         max_steps = self.max_steps if self.max_steps > 0 else float('inf')
         while step < max_steps:
             step += 1
@@ -71,10 +76,32 @@ class FCAgent(Agent):
             tool_calls = response.get("tool_calls", [])
 
             if not tool_calls:
-                # 没有工具调用 → 这是最终回复
+                # 没有工具调用 → 检查是否为最终回复或死循环
                 content = response.get("content") or ""
-                self.add_to_history(content, "assistant")
-                return content
+
+                # 循环检测: 连续3次相同内容 → 强制终止
+                if content.strip() == last_content.strip():
+                    repeat_count += 1
+                    if repeat_count >= 3:
+                        self.add_to_history(content, "assistant")
+                        return content
+                else:
+                    repeat_count = 0
+                    last_content = content
+
+                no_tool_count += 1
+                # 连续2次无工具调用 → 应该是最终回复了
+                if no_tool_count >= 2:
+                    self.add_to_history(content, "assistant")
+                    return content
+
+                # 将当前回复追加到消息列表，让模型有机会追加
+                messages.append({"role": "assistant", "content": content})
+                continue
+
+            # 有工具调用 → 重置循环检测
+            repeat_count = 0
+            no_tool_count = 0
 
             # 3. 记录助手消息（含 tool_calls）
             assistant_msg = {"role": "assistant", "content": response.get("content") or ""}

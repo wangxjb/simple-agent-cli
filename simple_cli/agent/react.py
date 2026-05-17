@@ -45,6 +45,9 @@ class ReActAgent(Agent):
         self.add_to_history(question, "user")
         step = 0
 
+        # 循环检测
+        last_action = ""
+
         max_steps = self.max_steps if self.max_steps > 0 else float('inf')
         while step < max_steps:
             step += 1
@@ -89,7 +92,13 @@ class ReActAgent(Agent):
                 self.add_to_history(final_answer, "assistant")
                 return final_answer
 
-            # 5. 解析并执行工具
+            # 5. 循环检测
+            if action and action == last_action:
+                # 同一 Action 连续出现 → 死循环
+                return f"循环检测: 连续执行相同操作，强制终止。结果: {self.history[-1].content if self.history else '无'}"
+            last_action = action
+
+            # 6. 解析并执行工具
             tool_name, tool_input = self._parse_action(action)
 
             if not tool_name:
