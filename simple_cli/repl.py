@@ -17,7 +17,7 @@ from .agent import ReActAgent, FCAgent
 from .tools import ToolRegistry
 from .tools.builtin import (
     ReadFileTool, WriteFileTool, RunCommandTool,
-    ListDirTool, WebSearchTool,
+    ListDirTool, WebSearchTool, VerifyFileTool,
 )
 from .session import SessionStore
 from .memory import MemoryStore
@@ -119,6 +119,7 @@ AVAILABLE_TOOLS = {
     "run_command": RunCommandTool,
     "list_directory": ListDirTool,
     "web_search": WebSearchTool,
+    "verify_file": VerifyFileTool,
 }
 
 BANNER = """
