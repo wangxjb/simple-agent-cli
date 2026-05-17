@@ -199,13 +199,26 @@ class HelloAgentsLLM:
         import json
 
         def _call():
+            request_kwargs = {
+                "model": self.model,
+                "messages": messages,
+                "tools": tools,
+                "temperature": kwargs.get("temperature", self.temperature),
+                "max_tokens": kwargs.get("max_tokens", self.max_tokens),
+                "stream": False,
+            }
+            thinking = kwargs.get("thinking")
+            is_deepseek_v4 = (
+                "api.deepseek.com" in (self.base_url or "").lower()
+                and self.model.startswith("deepseek-v4")
+            )
+            if thinking or is_deepseek_v4:
+                request_kwargs["extra_body"] = {
+                    "thinking": {"type": thinking or "disabled"}
+                }
+
             response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                tools=tools,
-                temperature=kwargs.get("temperature", self.temperature),
-                max_tokens=kwargs.get("max_tokens", self.max_tokens),
-                stream=False,
+                **request_kwargs,
             )
             choice = response.choices[0]
             msg = choice.message
