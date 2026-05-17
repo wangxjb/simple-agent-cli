@@ -168,17 +168,55 @@ class ReActAgent(Agent):
         return {}
 
     def _parse_kv_input(self, text: str, parameters: list) -> dict:
-        """解析 key: value, key2: value2 格式的输入"""
+        """
+        解析 key: value, key2: value2 格式的输入。
+
+        对于多参数工具（如 write_file(path, content)），按参数名定位：
+        找到每个参数名作为锚点，提取其值（到下一个参数名之前）。
+        这对于 content 参数包含 HTML/代码等含逗号冒号的文本至关重要。
+        """
         result = {}
-        # 按逗号或分号拆分，同时注意不要拆分引号内的内容
-        parts = re.split(r',\s*(?=(?:[^"]*"[^"]*")*[^"]*$)', text)
-        for part in parts:
-            kv = part.split(":", 1)
-            if len(kv) == 2:
-                key = kv[0].strip()
-                val = kv[1].strip().strip('"').strip("'")
-                result[key] = val
+        param_names = [p.name for p in parameters]
+
+        # 策略: 按参数名定位
+        # 如: "path: /tmp/x.html, content: <html>,</html>"
+        # → 找到 "path:" → 值到 "content:" 前 → path = "/tmp/x.html"
+        # → 找到 "content:" → 值到文本末尾 → content = "<html>,</html>"
+
+        remaining = text
+        for i, pname in enumerate(param_names):
+            # 查找当前参数名后跟冒号的位置
+            pattern = re.compile(rf'{pname}\s*:\s*', re.IGNORECASE)
+            match = pattern.search(remaining)
+            if not match:
+                continue
+
+            # 值的起始位置（冒号之后）
+            val_start = match.end()
+            remaining_after_key = remaining[val_start:]
+
+            # 找下一个参数名的位置（作为当前值的边界）
+            if i + 1 < len(param_names):
+                next_pattern = re.compile(
+                    rf',?\s*{param_names[i + 1]}\s*:\s*', re.IGNORECASE
+                )
+                next_match = next_pattern.search(remaining_after_key)
+                if next_match:
+                    val = remaining_after_key[:next_match.start()].strip()
+                    # 去掉首尾的引号
+                    val = val.strip('"').strip("'")
+                    result[pname] = val
+                    # 移动到下一个参数名
+                    remaining = remaining_after_key[next_match.start():]
+                else:
+                    val = remaining_after_key.strip().strip('"').strip("'")
+                    result[pname] = val
+                    break
+            else:
+                # 最后一个参数，取到末尾
+                val = remaining_after_key.strip().strip('"').strip("'")
+                result[pname] = val
+
         if not result:
-            # 解析失败 → 回退到单值映射
             return {}
         return result
