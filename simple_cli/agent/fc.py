@@ -109,6 +109,9 @@ class FCAgent(Agent):
 
             # 3. 记录助手消息（含 tool_calls）
             assistant_msg = {"role": "assistant", "content": response.get("content") or ""}
+            reasoning_content = response.get("reasoning_content")
+            if reasoning_content:
+                assistant_msg["reasoning_content"] = reasoning_content
             if tool_calls:
                 # OpenAI 需要 tool_calls 字段的格式
                 assistant_msg["tool_calls"] = [

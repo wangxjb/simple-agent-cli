@@ -232,6 +232,7 @@ class HelloAgentsLLM:
                 }
             return {
                 "content": msg.content,
+                "reasoning_content": getattr(msg, "reasoning_content", None),
                 "tool_calls": tool_calls,
                 "usage": usage,
             }
