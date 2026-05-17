@@ -59,6 +59,7 @@ Windows 终端需要 `-X utf8` 或设 `PYTHONUTF8=1` 来正确显示中文。Tab
 | `/tools` | 列出启用的工具 |
 | `/history` | 查看当前会话历史 |
 | `/clear` | 清除会话历史 |
+| `/compress` | 手动压缩对话历史 |
 | `/exit` | 退出（自动保存会话） |
 
 ---

@@ -131,7 +131,28 @@ class Agent(ABC):
             "message_count": len(self.history),
         }
 
-    # ===== 上下文压缩（内部）=====
+    # ===== 上下文压缩 =====
+
+    def compress_history(self) -> Dict[str, Any]:
+        """
+        手动触发历史压缩。
+
+        即使 token 未超阈值，也可以主动压缩。
+        返回压缩前后的统计信息。
+        """
+        before = self.token_usage()
+        if len(self.history) < 4:
+            return {"status": "skip", "reason": "消息太少，无需压缩"}
+
+        self._do_compress()
+        after = self.token_usage()
+        return {
+            "status": "ok",
+            "before_tokens": before["current_tokens"],
+            "after_tokens": after["current_tokens"],
+            "reduced": before["current_tokens"] - after["current_tokens"],
+            "compressions": self._compression_count,
+        }
 
     def _do_compress(self):
         """

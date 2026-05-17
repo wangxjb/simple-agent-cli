@@ -27,7 +27,7 @@ COMMANDS = [
     "/model", "/mode",
     "/resume", "/sessions",
     "/save", "/tools", "/clear", "/history",
-    "/single",
+    "/compress", "/single",
 ]
 
 MODEL_NAMES = ["deepseek", "glm", "qwen", "openai", "ollama"]
@@ -141,6 +141,7 @@ HELP_TEXT = """
   /save [name]       保存会话（不指定名则自动命名）
   /tools             列出当前启用的工具
   /clear             清除当前会话历史
+  /compress          手动压缩对话历史（生成摘要）
   /history           显示当前会话的历史消息
   /single <问题>     单轮模式（不进入 REPL，回答后退出）
 """
@@ -385,6 +386,15 @@ def repl(config: AppConfig):
             agent.clear_history()
             current_session_name = ""
             print("会话历史已清除")
+            continue
+
+        if user_input == "/compress":
+            result = agent.compress_history()
+            if result["status"] == "skip":
+                print(result["reason"])
+            else:
+                print(f"压缩完成: {result['before_tokens']} → {result['after_tokens']} token "
+                      f"(减少 {result['reduced']}, 共压缩 {result['compressions']} 次)")
             continue
 
         if user_input == "/history":
