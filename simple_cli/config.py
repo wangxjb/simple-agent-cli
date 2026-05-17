@@ -197,19 +197,26 @@ def resolve_agent_type(config: AppConfig, llm: "HelloAgentsLLM") -> str:
       只有 Ollama/本地模型可能需要 ReAct。
     """
     if config.agent_type == "auto":
-        # 按 base_url 推断：已知的云服务都支持 FC
-        fc_indicators = [
+        # 按 base_url 或模型名推断 FC 支持
+        fc_url_indicators = [
             "api.deepseek.com",
-            "open.bigmodel.cn",     # GLM
-            "dashscope.aliyuncs.com", # Qwen
+            "open.bigmodel.cn",
+            "dashscope.aliyuncs.com",
             "api.openai.com",
             "api.moonshot.cn",
         ]
+        fc_model_prefixes = [
+            "deepseek", "glm", "qwen", "gpt", "moonshot", "kimi",
+        ]
         url = (llm.base_url or "").lower()
-        for indicator in fc_indicators:
+        model = (llm.model or "").lower()
+
+        for indicator in fc_url_indicators:
             if indicator in url:
                 return "fc"
-        # 未知提供商（如本地 Ollama）→ 默认 ReAct
+        for prefix in fc_model_prefixes:
+            if model.startswith(prefix):
+                return "fc"
         return "react"
     return config.agent_type
 

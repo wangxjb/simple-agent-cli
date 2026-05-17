@@ -64,13 +64,25 @@ class FCAgent(Agent):
 
             # 1. 调用 LLM（带 tools）
             print(f"  [LLM 思考中...]", end="", flush=True)
+            progress_state = {"next_chars": 2048, "printed": False}
+
+            def _show_stream_progress(event: str, chars: int) -> None:
+                if chars >= progress_state["next_chars"]:
+                    print(".", end="", flush=True)
+                    progress_state["printed"] = True
+                    progress_state["next_chars"] += 2048
+
             try:
                 response = self.llm.invoke_with_tools(
                     messages=messages,
                     tools=tool_schemas,
+                    stream=True,
+                    on_progress=_show_stream_progress,
                 )
             except Exception as e:
                 return f"错误: LLM 调用失败 — {e}"
+            if progress_state["printed"]:
+                print("", flush=True)
 
             # 2. 检查是否有 tool_calls
             tool_calls = response.get("tool_calls", [])
@@ -78,6 +90,10 @@ class FCAgent(Agent):
             if not tool_calls:
                 # 没有工具调用 → 检查是否为最终回复或死循环
                 content = response.get("content") or ""
+
+                if content.strip():
+                    self.add_to_history(content, "assistant")
+                    return content
 
                 # 循环检测: 连续3次相同内容 → 强制终止
                 if content.strip() == last_content.strip():
@@ -105,6 +121,9 @@ class FCAgent(Agent):
 
             # 3. 记录助手消息（含 tool_calls）
             assistant_msg = {"role": "assistant", "content": response.get("content") or ""}
+            reasoning_content = response.get("reasoning_content")
+            if reasoning_content:
+                assistant_msg["reasoning_content"] = reasoning_content
             if tool_calls:
                 # OpenAI 需要 tool_calls 字段的格式
                 assistant_msg["tool_calls"] = [
