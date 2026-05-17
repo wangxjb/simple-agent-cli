@@ -41,6 +41,9 @@ main.py (CLI 入口)
         ├─→ agent/ (两种 Agent: ReActAgent 文本解析 vs FCAgent Function Calling)
         │     └─→ agent/base.py (Agent 基类 — LLM + ToolRegistry + 历史管理)
         ├─→ context.py (TokenCounter + HistoryCompressor — 上下文窗口管理)
+        ├─→ prompt.py (PromptBuilder — 动态系统提示组装)
+        ├─→ memory.py (MemoryStore — 跨会话持久化记忆)
+        ├─→ mcp.py (MCPClient — JSON-RPC 外部工具协议)
         └─→ session.py (SessionStore — 多会话 JSON 持久化)
 ```
 
@@ -88,6 +91,12 @@ main.py (CLI 入口)
 - `04-session-persistence.md` — 多会话持久化 + /resume 设计
 - `05-gap-analysis.md` — 与 Claude Code 的差距分析
 - `06-context-engineering.md` — 上下文窗口管理 + Token 计数 + 历史压缩
+- `07-system-prompt-engineering.md` — 动态系统提示 + 五维度注入
+- `08-error-recovery.md` — 错误重试 + 指数退避
+- `09-subagent.md` — 子代理 + 上下文隔离 + 摘要返回
+- `10-memory-system.md` — 跨会话记忆系统
+- `11-plan-mode.md` — 计划模式：规划→审批→执行
+- `12-mcp-protocol.md` — MCP 协议 + JSON-RPC 工具桥接
 
 ## 文档撰写规范
 
