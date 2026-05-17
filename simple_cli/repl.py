@@ -20,6 +20,7 @@ from .tools.builtin import (
     ListDirTool, WebSearchTool,
 )
 from .session import SessionStore
+from .memory import MemoryStore
 
 # Tab 补全命令列表（不含参数，纯命令名）
 COMMANDS = [
@@ -27,7 +28,7 @@ COMMANDS = [
     "/model", "/mode",
     "/resume", "/sessions",
     "/save", "/tools", "/clear", "/history",
-    "/compress", "/single",
+    "/compress", "/memory", "/remember", "/forget", "/single",
 ]
 
 MODEL_NAMES = ["deepseek", "glm", "qwen", "openai", "ollama"]
@@ -142,6 +143,9 @@ HELP_TEXT = """
   /tools             列出当前启用的工具
   /clear             清除当前会话历史
   /compress          手动压缩对话历史（生成摘要）
+  /remember <内容>   保存一条跨会话记忆
+  /forget <name>     删除一条记忆
+  /memory            列出所有记忆
   /history           显示当前会话的历史消息
   /single <问题>     单轮模式（不进入 REPL，回答后退出）
 """
@@ -395,6 +399,34 @@ def repl(config: AppConfig):
             else:
                 print(f"压缩完成: {result['before_tokens']} → {result['after_tokens']} token "
                       f"(减少 {result['reduced']}, 共压缩 {result['compressions']} 次)")
+            continue
+
+        if user_input == "/memory":
+            store = MemoryStore()
+            mems = store.list_all()
+            if not mems:
+                print("没有保存的记忆")
+            else:
+                for m in mems:
+                    print(f"  [{m['type']}] {m['name']}: {m['preview']}")
+            continue
+
+        if user_input.startswith("/remember "):
+            content = user_input[10:].strip()
+            if content:
+                store = MemoryStore()
+                store.save(f"mem_{len(store.list_all())+1}", content, "user", content[:50])
+                print(f"已记住: {content}")
+            continue
+
+        if user_input.startswith("/forget "):
+            name = user_input[8:].strip()
+            if name:
+                store = MemoryStore()
+                if store.delete(name):
+                    print(f"已删除记忆: {name}")
+                else:
+                    print(f"未找到记忆: {name}")
             continue
 
         if user_input == "/history":

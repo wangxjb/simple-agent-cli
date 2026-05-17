@@ -36,17 +36,22 @@ class PromptBuilder:
         if env:
             sections.append(env)
 
-        # 2. 可用工具
+        # 2. 记忆系统（全局共享的用户信息）
+        memory = self._build_memory_section()
+        if memory:
+            sections.append(memory)
+
+        # 3. 可用工具
         tools = self._build_tools_section(agent)
         if tools:
             sections.append(tools)
 
-        # 3. 项目上下文
+        # 4. 项目上下文
         project = self._build_project_section()
         if project:
             sections.append(project)
 
-        # 4. 对话状态（如果已压缩过）
+        # 5. 对话状态（如果已压缩过）
         status = self._build_status_section(agent)
         if status:
             sections.append(status)
@@ -100,6 +105,15 @@ class PromptBuilder:
                 except Exception:
                     pass
         return ""
+
+    def _build_memory_section(self) -> str:
+        """从全局记忆系统加载用户/项目记忆"""
+        try:
+            from .memory import MemoryStore
+            store = MemoryStore()
+            return store.load_for_prompt()
+        except Exception:
+            return ""
 
     def _build_status_section(self, agent) -> str:
         """当前对话的压缩和 token 状态"""
